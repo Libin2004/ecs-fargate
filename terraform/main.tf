@@ -1,0 +1,7 @@
+
+
+
+
+resource "aws_ecs_cluster" "cluster" {
+  name = "strapi-cluster-libin"
+}
