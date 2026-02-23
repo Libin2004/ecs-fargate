@@ -56,7 +56,7 @@ resource "aws_ecs_service" "service" {
     aws_subnet.public_2.id
   ]
     security_groups = [aws_security_group.ecs_sg.id]
-    assign_public_ip = false
+    assign_public_ip = true
   }
 
   depends_on = [aws_ecs_task_definition.strapi]
