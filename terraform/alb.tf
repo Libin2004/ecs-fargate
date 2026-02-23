@@ -1,5 +1,5 @@
 resource "aws_lb" "alb" {
-  name               = "strapi-alb"
+  name               = "strapi-alb-libin"
   load_balancer_type = "application"
   subnets = [
     aws_subnet.public_1.id,
@@ -13,7 +13,7 @@ resource "aws_lb" "alb" {
 }
 
 resource "aws_lb_target_group" "tg" {
-  name        = "strapi-tg"
+  name        = "strapi-tg-libin"
   port        = 1337
   protocol    = "HTTP"
   target_type = "ip"
