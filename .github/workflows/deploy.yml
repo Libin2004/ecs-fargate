@@ -3,7 +3,7 @@ name: Strapi Deploy Pipeline
 on:
   push:
     branches:
-      - ecr
+      - main
 
 env:
   AWS_REGION: us-east-1
