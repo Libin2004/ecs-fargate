@@ -92,30 +92,30 @@ jobs:
 
           echo "Creating appspec.json..."
 
-          cat <<EOF > appspec.json
+          cat > appspec.json <<EOF
+    {
+        "version": 1,
+        "Resources": [
           {
-            "version": 1,
-            "Resources": [
-              {
-                "TargetService": {
-                  "Type": "AWS::ECS::Service",
-                  "Properties": {
-                    "TaskDefinition": "$TASK_DEF_ARN",
-                    "LoadBalancerInfo": {
-                      "ContainerName": "strapi",
-                      "ContainerPort": 1337
-                    }
-                  }
+            "TargetService": {
+              "Type": "AWS::ECS::Service",
+              "Properties": {
+                "TaskDefinition": "$TASK_DEF_ARN",
+                "LoadBalancerInfo": {
+                  "ContainerName": "strapi",
+                  "ContainerPort": 1337
                 }
               }
-            ]
+            }
           }
-          EOF
+        ]
+      }
+      EOF
 
-          echo "Triggering CodeDeploy..."
+        echo "Triggering CodeDeploy..."
 
-          aws deploy create-deployment \
-            --application-name strapi-codedeploy \
-            --deployment-group-name strapi-deployment-group \
-            --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
-            --revision revisionType=AppSpecContent,appSpecContent="{\"content\":\"$(cat appspec.json | tr -d '\n')\"}"
+        aws deploy create-deployment \
+          --application-name strapi-codedeploy \
+          --deployment-group-name strapi-deployment-group \
+          --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
+          --s3-location s3://your-bucket-name/appspec.json
