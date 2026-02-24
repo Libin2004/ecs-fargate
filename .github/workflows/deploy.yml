@@ -8,22 +8,20 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: strapi-repo
-  ECS_CLUSTER: strapi-cluster
+  ECS_CLUSTER: strapi-cluster-libin
   ECS_SERVICE: strapi-service
   TASK_FAMILY: strapi-task
   CONTAINER_NAME: strapi
-  S3_BUCKET: your-codedeploy-bucket
+  S3_BUCKET: strapi-codedeploy-libin
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      
       - name: Checkout code
         uses: actions/checkout@v4
 
-     
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -31,12 +29,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      
       - name: Login to ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      
       - name: Build and push image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -45,62 +41,51 @@ jobs:
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./my-strapi-app
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-      
-      - name: Fetch task definition
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition $TASK_FAMILY \
-            --query taskDefinition > task-def.json
-
-      
-      - name: Update task definition
+      - name: Register new task definition
+        id: register-task
         env:
           IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
         run: |
-          cat task-def.json | jq --arg IMAGE "$IMAGE_URI" \
-          '.containerDefinitions[0].image = $IMAGE |
-           del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities)' \
-          > new-task-def.json
+          echo "Registering task definition..."
 
-      
-      - name: Register new task definition
-        id: register-task
-        run: |
           TASK_DEF_ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://new-task-def.json \
+            --family $TASK_FAMILY \
+            --network-mode awsvpc \
+            --requires-compatibilities FARGATE \
+            --cpu "512" \
+            --memory "1024" \
+            --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
+            --task-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
+            --container-definitions "[{\"name\":\"$CONTAINER_NAME\",\"image\":\"$IMAGE_URI\",\"essential\":true,\"portMappings\":[{\"containerPort\":1337,\"hostPort\":1337}]}]" \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
+
           echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
 
-      
       - name: Create AppSpec file
         run: |
-          cat <<EOF > appspec.json
-          {
+          echo '{
             "version": 1,
             "Resources": [
               {
                 "TargetService": {
                   "Type": "AWS::ECS::Service",
                   "Properties": {
-                    "TaskDefinition": "$TASK_DEF_ARN",
+                    "TaskDefinition": "'"$TASK_DEF_ARN"'",
                     "LoadBalancerInfo": {
-                      "ContainerName": "strapi",
+                      "ContainerName": "'"$CONTAINER_NAME"'",
                       "ContainerPort": 1337
                     }
                   }
                 }
               }
             ]
-          }
-          EOF
+          }' > appspec.json
 
-      
       - name: Upload AppSpec to S3
         run: |
           aws s3 cp appspec.json s3://$S3_BUCKET/appspec.json
 
-      
       - name: Deploy using CodeDeploy
         run: |
           aws deploy create-deployment \
