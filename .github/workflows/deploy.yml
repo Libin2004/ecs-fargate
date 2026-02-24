@@ -8,6 +8,7 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: strapi-app-libin
+  S3_BUCKET: strapi-codedeploy-libin  
 
 jobs:
   build:
@@ -21,7 +22,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Debug AWS
         run: aws sts get-caller-identity
@@ -60,9 +61,9 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Register Task Definition & Deploy via CodeDeploy
+      - name: Deploy using CodeDeploy
         run: |
           IMAGE_TAG=${{ github.sha }}
 
@@ -92,30 +93,34 @@ jobs:
 
           echo "Creating appspec.json..."
 
-          cat > appspec.json <<EOF
+          cat <<EOF > appspec.json
+{
+  "version": 1,
+  "Resources": [
     {
-        "version": 1,
-        "Resources": [
-          {
-            "TargetService": {
-              "Type": "AWS::ECS::Service",
-              "Properties": {
-                "TaskDefinition": "$TASK_DEF_ARN",
-                "LoadBalancerInfo": {
-                  "ContainerName": "strapi",
-                  "ContainerPort": 1337
-                }
-              }
-            }
+      "TargetService": {
+        "Type": "AWS::ECS::Service",
+        "Properties": {
+          "TaskDefinition": "$TASK_DEF_ARN",
+          "LoadBalancerInfo": {
+            "ContainerName": "strapi",
+            "ContainerPort": 1337
           }
-        ]
+        }
       }
-      EOF
+    }
+  ]
+}
+EOF
 
-        echo "Triggering CodeDeploy..."
+          echo "Uploading to S3..."
 
-        aws deploy create-deployment \
-          --application-name strapi-codedeploy \
-          --deployment-group-name strapi-deployment-group \
-          --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
-          --s3-location s3://your-bucket-name/appspec.json
+          aws s3 cp appspec.json s3://$S3_BUCKET/appspec.json
+
+          echo "Triggering CodeDeploy..."
+
+          aws deploy create-deployment \
+            --application-name strapi-codedeploy \
+            --deployment-group-name strapi-deployment-group \
+            --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
+            --revision revisionType=S3,s3Location={bucket=$S3_BUCKET,key=appspec.json,bundleType=JSON}
