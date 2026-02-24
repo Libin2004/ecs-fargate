@@ -1,6 +1,6 @@
 resource "aws_security_group" "ecs_sg" {
-  name   = "ecs-sg-libin"
-  vpc_id = aws_vpc.main.id
+  name = var.ecs_sg_name
+  vpc_id = var.vpc_id
 
   ingress {
     from_port   = 1337
@@ -19,8 +19,8 @@ resource "aws_security_group" "ecs_sg" {
 
 
 resource "aws_security_group" "alb_sg" {
-  name   = "alb-sg-libin"
-  vpc_id = aws_vpc.main.id
+  name = var.alb_sg_name
+  vpc_id = var.vpc_id
 
   ingress {
     from_port   = 80
@@ -28,6 +28,13 @@ resource "aws_security_group" "alb_sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  ingress {
+  from_port   = 443
+  to_port     = 443
+  protocol    = "tcp"
+  cidr_blocks = ["0.0.0.0/0"]
+}
 
   egress {
     from_port   = 0

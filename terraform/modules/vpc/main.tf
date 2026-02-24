@@ -1,10 +1,10 @@
 resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
+  cidr_block = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
 
   tags = {
-    Name = "strapi-vpc"
+    Name = var.vpc_name
   }
 }
 

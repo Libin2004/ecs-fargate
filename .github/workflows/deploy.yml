@@ -22,11 +22,9 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
-          
+
       - name: Debug AWS
-        run: |
-          echo "Testing AWS credentials..."
-          aws sts get-caller-identity
+        run: aws sts get-caller-identity
 
       - name: Create ECR repository if not exists
         run: |
@@ -50,7 +48,7 @@ jobs:
           docker push \
           ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
 
-  terraform:
+  deploy:
     needs: build
     runs-on: ubuntu-latest
 
@@ -64,25 +62,52 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Create S3 Backend Bucket if not exists
-        run: |
-          aws s3api head-bucket --bucket strapi-terraform-state-libin 2>/dev/null \
-          || aws s3api create-bucket --bucket strapi-terraform-state-libin --region us-east-1
-      
-      - name: Enable Versioning
-        run: |
-          aws s3api put-bucket-versioning \
-          --bucket strapi-terraform-state-libin \
-          --versioning-configuration Status=Enabled
-
-
-      - uses: hashicorp/setup-terraform@v3
-
-      - name: Terraform Apply
+      - name: Register Task Definition & Deploy via CodeDeploy
         run: |
           IMAGE_TAG=${{ github.sha }}
 
-          cd terraform
-          terraform init
-          terraform apply -auto-approve \
-          -var="image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG"
+          IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
+
+          echo "Registering new task definition..."
+
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --family strapi-task \
+            --network-mode awsvpc \
+            --requires-compatibilities FARGATE \
+            --cpu "512" \
+            --memory "1024" \
+            --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
+            --task-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
+            --container-definitions "[{
+              \"name\": \"strapi\",
+              \"image\": \"$IMAGE_URI\",
+              \"essential\": true,
+              \"portMappings\": [{
+                \"containerPort\": 1337,
+                \"hostPort\": 1337
+              }]
+            }]" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          echo "Triggering CodeDeploy..."
+
+          aws deploy create-deployment \
+            --application-name strapi-codedeploy \
+            --deployment-group-name strapi-deployment-group \
+            --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
+            --revision "revisionType=AppSpecContent,appSpecContent={\"content\":\"{
+              \\\"version\\\":1,
+              \\\"Resources\\\":[{
+                \\\"TargetService\\\":{
+                  \\\"Type\\\":\\\"AWS::ECS::Service\\\",
+                  \\\"Properties\\\":{
+                    \\\"TaskDefinition\\\":\\\"$TASK_DEF_ARN\\\",
+                    \\\"LoadBalancerInfo\\\":{
+                      \\\"ContainerName\\\":\\\"strapi\\\",
+                      \\\"ContainerPort\\\":1337
+                    }
+                  }
+                }
+              }]
+            }\"}"
