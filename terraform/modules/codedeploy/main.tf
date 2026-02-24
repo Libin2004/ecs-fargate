@@ -1,5 +1,5 @@
 resource "aws_codedeploy_app" "ecs" {
-  name             = "strapi-codedeploy"
+  name             = "strapi-codedeploy-libin"
   compute_platform = "ECS"
 }
 

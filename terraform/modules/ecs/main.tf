@@ -1,7 +1,7 @@
 resource "aws_ecs_service" "service" {
   name            = "strapi-service"
   cluster         = var.cluster_id
-  task_definition = aws_ecs_task_definition.strapi.arn
+  task_definition = "strapi-task"
   desired_count   = 1
 
  
@@ -30,5 +30,5 @@ resource "aws_ecs_service" "service" {
     assign_public_ip = true
   }
 
-  depends_on = [aws_ecs_task_definition.strapi]
+  
 }

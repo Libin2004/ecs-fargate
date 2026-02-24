@@ -1,4 +1,4 @@
-# 🔹 VPC MODULE
+
 module "vpc" {
   source = "./modules/vpc"
 
@@ -9,14 +9,14 @@ module "vpc" {
   az2                  = var.az2
 }
 
-# 🔹 SECURITY GROUP MODULE
+
 module "sg" {
-  source = "./modules/security-group"
+  source = "./modules/secgrp"
 
   vpc_id = module.vpc.vpc_id
 }
 
-# 🔹 ALB MODULE (BLUE/GREEN READY)
+
 module "alb" {
   source = "./modules/alb"
 
@@ -44,6 +44,8 @@ module "ecs" {
   green_tg_arn = module.alb.green_tg_arn
 
   image = var.image
+  execution_role_arn = var.execution_role_arn
+  task_role_arn      = var.task_role_arn
 }
 
 

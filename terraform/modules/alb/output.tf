@@ -1,4 +1,4 @@
-ooutput "blue_tg_arn" {
+output "blue_tg_arn" {
   value = aws_lb_target_group.blue.arn
 }
 

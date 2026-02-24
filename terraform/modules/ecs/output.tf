@@ -8,7 +8,3 @@ output "service_arn" {
   value       = aws_ecs_service.service.arn
 }
 
-output "task_definition_arn" {
-  description = "Task Definition ARN"
-  value       = aws_ecs_task_definition.strapi.arn
-}
