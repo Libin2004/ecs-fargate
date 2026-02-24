@@ -1,4 +1,4 @@
-name: Strapi Deploy Pipeline
+name: Deploy Strapi to ECS
 
 on:
   push:
@@ -7,55 +7,23 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: strapi-app-libin
-  S3_BUCKET: strapi-codedeploy-libin
+  ECR_REPOSITORY: strapi-repo
+  ECS_CLUSTER: strapi-cluster
+  ECS_SERVICE: strapi-service
+  TASK_FAMILY: strapi-task
+  CONTAINER_NAME: strapi
+  S3_BUCKET: your-codedeploy-bucket
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Debug AWS
-        run: aws sts get-caller-identity
-
-      - name: Create ECR repository if not exists
-        run: |
-          aws ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION \
-          || aws ecr create-repository --repository-name $ECR_REPOSITORY --region $AWS_REGION
-
-      - name: Login to ECR
-        run: |
-          aws ecr get-login-password --region $AWS_REGION \
-          | docker login --username AWS --password-stdin \
-          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com
-
-      - name: Build and Push Image
-        run: |
-          IMAGE_TAG=${{ github.sha }}
-
-          docker build -t $ECR_REPOSITORY:$IMAGE_TAG ./my-strapi-app
-          docker tag $ECR_REPOSITORY:$IMAGE_TAG \
-          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
-
-          docker push \
-          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
-
   deploy:
-    needs: build
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
 
+     
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -63,54 +31,78 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy using CodeDeploy
+      
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      
+      - name: Build and push image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          IMAGE_TAG=${{ github.sha }}
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./my-strapi-app
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-          IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
+      
+      - name: Fetch task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition $TASK_FAMILY \
+            --query taskDefinition > task-def.json
 
-          echo "Registering new task definition..."
+      
+      - name: Update task definition
+        env:
+          IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+        run: |
+          cat task-def.json | jq --arg IMAGE "$IMAGE_URI" \
+          '.containerDefinitions[0].image = $IMAGE |
+           del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities)' \
+          > new-task-def.json
 
+      
+      - name: Register new task definition
+        id: register-task
+        run: |
           TASK_DEF_ARN=$(aws ecs register-task-definition \
-            --family strapi-task \
-            --network-mode awsvpc \
-            --requires-compatibilities FARGATE \
-            --cpu "512" \
-            --memory "1024" \
-            --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
-            --task-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
-            --container-definitions "[{\"name\":\"strapi\",\"image\":\"$IMAGE_URI\",\"essential\":true,\"portMappings\":[{\"containerPort\":1337,\"hostPort\":1337}]}]" \
+            --cli-input-json file://new-task-def.json \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
+          echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
 
-          echo "Creating appspec.json..."
-
+      
+      - name: Create AppSpec file
+        run: |
           cat <<EOF > appspec.json
-{
-"version": 1,
-"Resources": [
-{
-"TargetService": {
-"Type": "AWS::ECS::Service",
-"Properties": {
-"TaskDefinition": "$TASK_DEF_ARN",
-"LoadBalancerInfo": {
-"ContainerName": "strapi",
-"ContainerPort": 1337
-}
-}
-}
-}
-]
-}
-EOF
+          {
+            "version": 1,
+            "Resources": [
+              {
+                "TargetService": {
+                  "Type": "AWS::ECS::Service",
+                  "Properties": {
+                    "TaskDefinition": "$TASK_DEF_ARN",
+                    "LoadBalancerInfo": {
+                      "ContainerName": "strapi",
+                      "ContainerPort": 1337
+                    }
+                  }
+                }
+              }
+            ]
+          }
+          EOF
 
-          echo "Uploading to S3..."
-
+      
+      - name: Upload AppSpec to S3
+        run: |
           aws s3 cp appspec.json s3://$S3_BUCKET/appspec.json
 
-          echo "Triggering CodeDeploy..."
-
+      
+      - name: Deploy using CodeDeploy
+        run: |
           aws deploy create-deployment \
             --application-name strapi-codedeploy \
             --deployment-group-name strapi-deployment-group \
