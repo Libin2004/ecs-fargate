@@ -8,7 +8,7 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: strapi-app-libin
-  S3_BUCKET: strapi-codedeploy-libin  
+  S3_BUCKET: strapi-codedeploy-libin
 
 jobs:
   build:
@@ -79,15 +79,7 @@ jobs:
             --memory "1024" \
             --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
             --task-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
-            --container-definitions "[{
-              \"name\": \"strapi\",
-              \"image\": \"$IMAGE_URI\",
-              \"essential\": true,
-              \"portMappings\": [{
-                \"containerPort\": 1337,
-                \"hostPort\": 1337
-              }]
-            }]" \
+            --container-definitions "[{\"name\":\"strapi\",\"image\":\"$IMAGE_URI\",\"essential\":true,\"portMappings\":[{\"containerPort\":1337,\"hostPort\":1337}]}]" \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
 
@@ -95,21 +87,21 @@ jobs:
 
           cat <<EOF > appspec.json
 {
-  "version": 1,
-  "Resources": [
-    {
-      "TargetService": {
-        "Type": "AWS::ECS::Service",
-        "Properties": {
-          "TaskDefinition": "$TASK_DEF_ARN",
-          "LoadBalancerInfo": {
-            "ContainerName": "strapi",
-            "ContainerPort": 1337
-          }
-        }
-      }
-    }
-  ]
+"version": 1,
+"Resources": [
+{
+"TargetService": {
+"Type": "AWS::ECS::Service",
+"Properties": {
+"TaskDefinition": "$TASK_DEF_ARN",
+"LoadBalancerInfo": {
+"ContainerName": "strapi",
+"ContainerPort": 1337
+}
+}
+}
+}
+]
 }
 EOF
 
