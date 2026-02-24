@@ -22,9 +22,9 @@ resource "aws_ecs_service" "service" {
   }
 
   network_configuration {
-    subnets = [
-      var.subnet_1,
-      var.subnet_2
+     subnets = [
+    var.subnet_1,
+    var.subnet_2
     ]
     security_groups  = [var.ecs_sg_id]
     assign_public_ip = true

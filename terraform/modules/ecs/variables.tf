@@ -3,21 +3,9 @@ variable "cluster_id" {
   type        = string
 }
 
-variable "subnet_1" {
-  description = "Subnet 1 ID"
-  type        = string
-}
-
-variable "subnet_2" {
-  description = "Subnet 2 ID"
-  type        = string
-}
-
-variable "ecs_sg_id" {
-  description = "ECS Security Group ID"
-  type        = string
-}
-
+variable "subnet_1" {}
+variable "subnet_2" {}
+variable "ecs_sg_id" {}
 
 variable "blue_tg_arn" {
   description = "Blue target group ARN"

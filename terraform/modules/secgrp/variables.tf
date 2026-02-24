@@ -1,6 +1,5 @@
 variable "vpc_id" {
-  description = "VPC ID where security groups will be created"
-  type        = string
+  type = string
 }
 
 variable "ecs_sg_name" {

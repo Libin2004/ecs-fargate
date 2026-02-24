@@ -1,32 +1,33 @@
 
-module "vpc" {
-  source = "./modules/vpc"
+data "aws_vpc" "default" {
+  default = true
+}
 
-  vpc_cidr             = var.vpc_cidr
-  public_subnet_1_cidr = var.public_subnet_1_cidr
-  public_subnet_2_cidr = var.public_subnet_2_cidr
-  az1                  = var.az1
-  az2                  = var.az2
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
 }
 
 
 module "sg" {
   source = "./modules/secgrp"
 
-  vpc_id = module.vpc.vpc_id
+  vpc_id = data.aws_vpc.default.id
 }
 
 
 module "alb" {
   source = "./modules/alb"
 
-  subnet_1  = module.vpc.public_subnet_1_id
-  subnet_2  = module.vpc.public_subnet_2_id
+  subnet_1  = data.aws_subnets.default.ids[0]
+  subnet_2  = data.aws_subnets.default.ids[1]
   alb_sg_id = module.sg.alb_sg_id
-  vpc_id    = module.vpc.vpc_id
+  vpc_id    = data.aws_vpc.default.id
 }
 
-# 🔹 ECS CLUSTER (ROOT LEVEL)
+
 resource "aws_ecs_cluster" "cluster" {
   name = "strapi-cluster-libin"
 }
@@ -36,8 +37,8 @@ module "ecs" {
   source = "./modules/ecs"
 
   cluster_id   = aws_ecs_cluster.cluster.id
-  subnet_1     = module.vpc.public_subnet_1_id
-  subnet_2     = module.vpc.public_subnet_2_id
+  subnet_1     = data.aws_subnets.default.ids[0]
+  subnet_2     = data.aws_subnets.default.ids[1]
   ecs_sg_id    = module.sg.ecs_sg_id
 
   blue_tg_arn  = module.alb.blue_tg_arn
@@ -56,8 +57,8 @@ module "codedeploy" {
   cluster_name        = "strapi-cluster-libin"
   service_name        = module.ecs.service_name
 
-  blue_tg_name  = "strapi-blue-tg"
-  green_tg_name = "strapi-green-tg"
+  blue_tg_name  = "strapi-blue-tg-libin"
+  green_tg_name = "strapi-green-tg-libin"
 
   listener_arn = module.alb.listener_arn
 }

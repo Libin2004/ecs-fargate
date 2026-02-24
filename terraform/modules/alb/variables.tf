@@ -1,22 +1,8 @@
-variable "subnet_1" {
-  description = "Public subnet 1 ID"
-  type        = string
-}
+variable "subnet_1" {}
+variable "subnet_2" {}
+variable "alb_sg_id" {}
+variable "vpc_id" {}
 
-variable "subnet_2" {
-  description = "Public subnet 2 ID"
-  type        = string
-}
-
-variable "alb_sg_id" {
-  description = "ALB Security Group ID"
-  type        = string
-}
-
-variable "vpc_id" {
-  description = "VPC ID"
-  type        = string
-}
 
 variable "alb_name" {
   description = "ALB Name"
