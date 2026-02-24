@@ -1,159 +1,172 @@
-# 🚀 Strapi Deployment on AWS ECS Fargate using Terraform & CI/CD
+# 🚀 Strapi Deployment on AWS ECS (Fargate) with Blue/Green Deployment
 
 ## 📌 Project Overview
 
-This project demonstrates how to deploy a **Strapi (Node.js CMS)** application on **AWS ECS Fargate** using **Terraform (Infrastructure as Code)** and automate the deployment using **GitHub Actions (CI/CD pipeline)**.
+This project demonstrates how to deploy a **Strapi application** on AWS using:
 
-The architecture follows **production-level best practices**, including a custom VPC, Application Load Balancer, and containerized deployment.
+* **ECS Fargate**
+* **Application Load Balancer (ALB)**
+* **Blue/Green Deployment with CodeDeploy**
+* **CI/CD using GitHub Actions**
+* **Docker & Amazon ECR**
 
 ---
 
-## 🏗️ Architecture
+## 🧱 Architecture
 
-```
-User → ALB → Target Group → ECS Service → Fargate Task (Strapi)
-```
-
-### Components:
-
-* **VPC** with public subnets
-* **Application Load Balancer (ALB)** for traffic routing
-* **ECS Cluster (Fargate)** for container execution
-* **ECR** for storing Docker images
-* **CloudWatch** for logging and monitoring
-* **GitHub Actions** for CI/CD automation
+* ECS Cluster with Fargate launch type
+* ALB with **Blue & Green Target Groups**
+* CodeDeploy for traffic shifting
+* S3 bucket for AppSpec file
+* GitHub Actions for CI/CD pipeline
 
 ---
 
 ## ⚙️ Technologies Used
 
 * AWS ECS (Fargate)
-* AWS ALB (Application Load Balancer)
-* AWS ECR (Elastic Container Registry)
-* AWS CloudWatch
-* Terraform
+* AWS ALB
+* AWS CodeDeploy
+* AWS ECR
+* AWS S3
+* Terraform (Infrastructure as Code)
+* GitHub Actions (CI/CD)
 * Docker
-* GitHub Actions
 
 ---
 
-## 📂 Terraform Structure
+## 📁 Project Structure
 
 ```
-terraform/
-├── provider.tf       # AWS provider configuration
-├── vpc.tf            # VPC, subnets, IGW, route tables
-├── security.tf       # Security groups
-├── alb.tf            # ALB, target group, listener
-├── ecs.tf            # ECS cluster, task definition, service
-├── variables.tf      # Input variables
-├── outputs.tf        # Outputs (ALB DNS)
+.
+├── .github/workflows/deploy.yml
+├── terraform/
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── provider.tf
+│   ├── modules/
+│   │   ├── ecs/
+│   │   ├── alb/
+│   │   ├── security-group/
+│   │   └── codedeploy/
+├── my-strapi-app/
+└── README.md
 ```
 
 ---
 
-## 🔧 Setup Instructions
+## 🔄 CI/CD Workflow
 
-### 1. Clone Repository
+1. Push code to `main` branch
+2. GitHub Actions triggers pipeline
+3. Build Docker image
+4. Push image to Amazon ECR
+5. Register new ECS Task Definition
+6. Generate AppSpec file
+7. Upload AppSpec to S3
+8. Trigger CodeDeploy deployment
+9. Traffic shifts from **Blue → Green**
+
+---
+
+## 🔐 Prerequisites
+
+* AWS Account
+* IAM Roles:
+
+  * ECS Task Execution Role
+  * CodeDeploy Role
+* S3 Bucket for AppSpec
+* ECR Repository
+
+---
+
+## 🚀 Setup Instructions
+
+### 1️⃣ Clone Repository
 
 ```bash
-git clone https://github.com/Libin2004/docker-strapi.git
-cd docker-strapi
+git clone <your-repo-url>
+cd <your-repo>
 ```
 
 ---
 
-### 2. Initialize Terraform
+### 2️⃣ Deploy Infrastructure (Terraform)
 
 ```bash
 cd terraform
 terraform init
-```
-
----
-
-### 3. Apply Infrastructure
-
-```bash
+terraform plan
 terraform apply
 ```
 
 ---
 
-### 4. Access Application
+### 3️⃣ Create S3 Bucket
 
-After deployment, Terraform will output:
-
-```
-alb_dns = <your-load-balancer-url>
+```bash
+aws s3 mb s3://strapi-codedeploy-libin --region us-east-1
 ```
 
-Open it in your browser.
+---
+
+### 4️⃣ Push Code (Trigger CI/CD)
+
+```bash
+git add .
+git commit -m "Initial deployment"
+git push origin main
+```
 
 ---
 
-## 🐳 CI/CD Pipeline (GitHub Actions)
+## 🔁 Deployment Strategy
 
-The pipeline performs:
+* **Blue Environment** → Current version
+* **Green Environment** → New version
+* CodeDeploy gradually shifts traffic using:
 
-1. Build Docker image
-2. Tag the image
-3. Push to AWS ECR
-4. Update ECS task definition
-5. Deploy new version automatically
+  * `CodeDeployDefault.ECSCanary10Percent5Minutes`
 
 ---
 
-## 📊 Monitoring
+## 📊 Features
 
-* Logs are sent to **CloudWatch Logs**
-* ECS metrics (CPU, Memory) are monitored via **CloudWatch**
-* ALB health checks ensure service availability
-
----
-
-## 🔐 Security
-
-* ALB is publicly accessible (port 80)
-* ECS tasks are accessed only via ALB
-* Security groups restrict direct access to containers
+* Zero downtime deployment
+* Automatic rollback on failure
+* Scalable serverless containers (Fargate)
+* Fully automated CI/CD pipeline
 
 ---
 
-## ⚠️ Improvements (Future Enhancements)
+## 🧠 Key Learnings
 
-* Add HTTPS using ACM
-* Move ECS to private subnet with NAT Gateway
-* Add Auto Scaling based on CPU/Memory
-* Integrate RDS for persistent database
-
----
-
-## 🎯 Key Features
-
+* ECS Fargate architecture
+* Blue/Green deployment strategy
 * Infrastructure as Code using Terraform
-* Serverless container deployment using Fargate
-* Load balancing with ALB
-* Automated CI/CD pipeline
-* Scalable and production-ready architecture
-
----
-
-## 🧠 Learning Outcomes
-
-* ECS & Fargate architecture
-* Terraform modular structure
 * CI/CD automation with GitHub Actions
-* AWS networking (VPC, subnets, security groups)
-* Load balancing and monitoring
+* AWS networking and security
 
 ---
 
-## 📌 Author
+## 📌 Future Improvements
 
-**Sahaya Libin**
+* Add HTTPS (ACM + ALB Listener 443)
+* Add CloudWatch monitoring & alerts
+* Add Auto Scaling for ECS service
+* Use Terraform remote state with locking
 
-* Passionate about DevOps & Cloud Technologies
-* Skilled in Linux, AWS, Docker, CI/CD, and Monitoring
+---
+
+## 👨‍💻 Author
+
+**Libin**
+
+---
+
+## ⭐ Conclusion
+
+This project showcases a **production-ready DevOps pipeline** using AWS services with modern deployment strategies like Blue/Green for high availability and zero downtime.
 
 ---
