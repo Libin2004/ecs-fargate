@@ -89,7 +89,7 @@ jobs:
       - name: Deploy using CodeDeploy
         run: |
           aws deploy create-deployment \
-            --application-name strapi-codedeploy \
+            --application-name strapi-codedeploy-libin \
             --deployment-group-name strapi-deployment-group \
             --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
             --revision "revisionType=S3,s3Location={bucket=$S3_BUCKET,key=appspec.json,bundleType=JSON}"

@@ -1,4 +1,3 @@
-
 data "aws_vpc" "default" {
   default = true
 }
@@ -47,6 +46,7 @@ module "ecs" {
   image = var.image
   execution_role_arn = var.execution_role_arn
   task_role_arn      = var.task_role_arn
+  task_definition_arn = aws_ecs_task_definition.strapi.arn
 }
 
 
@@ -61,4 +61,35 @@ module "codedeploy" {
   green_tg_name = "strapi-green-tg-libin"
 
   listener_arn = module.alb.listener_arn
+}
+
+resource "aws_ecs_task_definition" "strapi" {
+  family                   = "strapi-task"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "512"
+  memory                   = "1024"
+
+  execution_role_arn = var.execution_role_arn
+  task_role_arn      = var.task_role_arn
+
+  container_definitions = jsonencode([
+    {
+      name  = "strapi"
+      image = var.image
+      essential = true
+
+      portMappings = [
+        {
+          containerPort = 1337
+          hostPort      = 1337
+        }
+      ]
+
+      environment = [
+        { name = "HOST", value = "0.0.0.0" },
+        { name = "PORT", value = "1337" }
+      ]
+    }
+  ])
 }

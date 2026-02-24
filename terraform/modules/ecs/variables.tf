@@ -32,3 +32,7 @@ variable "task_role_arn" {
   description = "Task role ARN"
   type        = string
 }
+variable "task_definition_arn" {
+  description = "Initial task definition ARN"
+  type        = string
+}

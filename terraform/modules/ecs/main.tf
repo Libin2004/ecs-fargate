@@ -1,7 +1,7 @@
 resource "aws_ecs_service" "service" {
   name            = "strapi-service"
   cluster         = var.cluster_id
-  task_definition = "strapi-task"
+  task_definition = var.task_definition_arn
   desired_count   = 1
 
  
@@ -29,6 +29,8 @@ resource "aws_ecs_service" "service" {
     security_groups  = [var.ecs_sg_id]
     assign_public_ip = true
   }
-
+lifecycle {
+  ignore_changes = [task_definition]
+}
   
 }
