@@ -11,11 +11,8 @@ env:
   ECS_CLUSTER: strapi-cluster-libin 
   ECS_SERVICE: strapi-service-libin 
   TASK_FAMILY: strapi-task-libin 
-  
-  
 
 jobs:
-
 
   build:
     runs-on: ubuntu-latest
@@ -29,10 +26,12 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
       - name: Create ECR repository if not exists
         run: |
           aws ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION \
           || aws ecr create-repository --repository-name $ECR_REPOSITORY --region $AWS_REGION
+
       - name: Login to ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -41,12 +40,9 @@ jobs:
         run: |
           IMAGE_TAG=${{ github.sha }}
           IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
-
           docker build -t $IMAGE_URI ./my-strapi-app
           docker push $IMAGE_URI
-
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
-
 
   terraform:
     needs: build
@@ -63,22 +59,18 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - uses: hashicorp/setup-terraform@v3
+
       - name: Create S3 backend bucket if not exists
         run: |
           aws s3api head-bucket --bucket strapi-terraform-state-libin 2>/dev/null \
           || aws s3 mb s3://strapi-terraform-state-libin --region us-east-1
-      
-      - name: Destroy ECS Service (fix CodeDeploy issue)
-        run: |
-          cd terraform
-          terraform init
-          terraform destroy -target=module.ecs -auto-approve 
+
+      - name: Terraform Apply
         run: |
           cd terraform
           terraform init
           terraform apply -auto-approve \
           -var="image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}"
-
 
   deploy:
     needs: terraform
@@ -94,7 +86,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Register Task Definition & Deploy
+      - name: Register Task Definition
         run: |
           IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}
 
@@ -106,12 +98,14 @@ jobs:
             --memory "1024" \
             --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
             --task-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
-            --container-definitions "[{\"name\":\"strapi",\"image\":\"$IMAGE_URI\",\"essential\":true,\"portMappings\":[{\"containerPort\":1337,\"hostPort\":1337}]}]" \
+            --container-definitions "[{\"name\":\"strapi\",\"image\":\"$IMAGE_URI\",\"essential\":true,\"portMappings\":[{\"containerPort\":1337,\"hostPort\":1337}]}]" \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
 
-          echo "Creating appspec.json..."
+          echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
 
+      - name: Create AppSpec
+        run: |
           echo '{
             "version": 1,
             "Resources": [
@@ -129,6 +123,7 @@ jobs:
               }
             ]
           }' > appspec.json
+
       - name: Deploy using CodeDeploy
         run: |
           cat <<EOF > revision.json
@@ -142,10 +137,8 @@ jobs:
           }
           EOF
 
-          echo "Uploading AppSpec..."
           aws s3 cp appspec.json s3://strapi-terraform-state-libin/appspec.json
 
-          echo "Triggering CodeDeploy..."
           aws deploy create-deployment \
             --application-name strapi-codedeploy-libin \
             --deployment-group-name strapi-deployment-group-libin \
