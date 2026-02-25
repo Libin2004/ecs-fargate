@@ -12,7 +12,7 @@ env:
   ECS_SERVICE: strapi-service-libin 
   TASK_FAMILY: strapi-task-libin 
   CONTAINER_NAME: strapi-libin
-  S3_BUCKET: strapi-codedeploy-libin
+  
 
 jobs:
 
@@ -125,7 +125,7 @@ jobs:
             ]
           }' > appspec.json
 
-          aws s3 cp appspec.json s3://$S3_BUCKET/appspec.json
+          aws s3 cp appspec.json s3://strapi-terraform-state-libin/appspec.json
 
           aws deploy create-deployment \
             --application-name strapi-codedeploy-libin \
