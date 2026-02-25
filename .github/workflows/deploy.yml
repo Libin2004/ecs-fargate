@@ -85,7 +85,7 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-
+       
       - name: Register Task Definition & Deploy
         run: |
           IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}
@@ -144,6 +144,21 @@ jobs:
               }
             ]
           }' > appspec.json
+      - name: Stop previous deployment (if any)
+        run: |
+          DEPLOY_ID=$(aws deploy list-deployments \
+            --application-name strapi-codedeploy-libin \
+            --deployment-group-name strapi-deployment-group-libin \
+            --include-only-statuses InProgress \
+            --query "deployments[0]" \
+            --output text)
+
+          if [ "$DEPLOY_ID" != "None" ]; then
+            echo "Stopping deployment $DEPLOY_ID"
+            aws deploy stop-deployment --deployment-id $DEPLOY_ID
+          else
+            echo "No active deployment"
+          fi    
 
       - name: Deploy using CodeDeploy
         run: |
