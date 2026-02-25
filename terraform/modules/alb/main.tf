@@ -20,6 +20,10 @@ resource "aws_lb_target_group" "blue" {
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = var.vpc_id
+
+   lifecycle {
+    prevent_destroy = true
+  }
 }
 
 
@@ -29,6 +33,10 @@ resource "aws_lb_target_group" "green" {
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = var.vpc_id
+
+   lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_lb_listener" "http" {
