@@ -34,11 +34,12 @@ blue_green_deployment_config {
     target_group_pair_info {
 
       target_group {
-        name = var.blue_tg_name
+        blue_tg_name  = "strapi-blue-tg-libin"
+
       }
 
       target_group {
-        name = var.green_tg_name
+        green_tg_name = "strapi-green-tg-libin"
       }
 
       prod_traffic_route {

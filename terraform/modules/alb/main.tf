@@ -15,7 +15,7 @@ resource "aws_lb" "alb" {
 
 
 resource "aws_lb_target_group" "blue" {
-  name        = "strapi-blue-tg"
+  name        = "strapi-blue-tg-libin"
   port        = 1337
   protocol    = "HTTP"
   target_type = "ip"
@@ -24,7 +24,7 @@ resource "aws_lb_target_group" "blue" {
 
 
 resource "aws_lb_target_group" "green" {
-  name        = "strapi-green-tg"
+  name        = "strapi-green-tg-libin"
   port        = 1337
   protocol    = "HTTP"
   target_type = "ip"
