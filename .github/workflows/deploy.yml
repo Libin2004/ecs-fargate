@@ -7,7 +7,11 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: strapi-repo
+  ECR_REPOSITORY: strapi-repo-libin
+  ECS_CLUSTER: strapi-cluster-libin 
+  ECS_SERVICE: strapi-service-libin 
+  TASK_FAMILY: strapi-task-libin 
+  CONTAINER_NAME: strapi-libin
   S3_BUCKET: strapi-codedeploy-libin
 
 jobs:
@@ -25,7 +29,10 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-
+      - name: Create ECR repository if not exists
+        run: |
+          aws ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION \
+          || aws ecr create-repository --repository-name $ECR_REPOSITORY --region $AWS_REGION
       - name: Login to ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -84,14 +91,14 @@ jobs:
           IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}
 
           TASK_DEF_ARN=$(aws ecs register-task-definition \
-            --family strapi-task \
+            --family $TASK_FAMILY \
             --network-mode awsvpc \
             --requires-compatibilities FARGATE \
             --cpu "512" \
             --memory "1024" \
             --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
             --task-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
-            --container-definitions "[{\"name\":\"strapi\",\"image\":\"$IMAGE_URI\",\"essential\":true,\"portMappings\":[{\"containerPort\":1337,\"hostPort\":1337}]}]" \
+            --container-definitions "[{\"name\":\"$CONTAINER_NAME\",\"image\":\"$IMAGE_URI\",\"essential\":true,\"portMappings\":[{\"containerPort\":1337,\"hostPort\":1337}]}]" \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
 
@@ -106,7 +113,7 @@ jobs:
                   "Properties": {
                     "TaskDefinition": "'"$TASK_DEF_ARN"'",
                     "LoadBalancerInfo": {
-                      "ContainerName": "strapi",
+                      "ContainerName": "$CONTAINER_NAME",
                       "ContainerPort": 1337
                     }
                   }
