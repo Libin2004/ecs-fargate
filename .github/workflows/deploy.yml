@@ -86,9 +86,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Register Task Definition
+      - name: Register Task Definition & Deploy
         run: |
           IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}
+
+          echo "Registering task definition..."
 
           TASK_DEF_ARN=$(aws ecs register-task-definition \
             --family $TASK_FAMILY \
@@ -98,23 +100,31 @@ jobs:
             --memory "1024" \
             --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
             --task-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
-            --container-definitions "[{
-              \"name\":\"strapi\",
-              \"image\":\"$IMAGE_URI\",
-              \"essential\":true,
-              \"portMappings\":[{\"containerPort\":1337,\"hostPort\":1337}],
-              \"environment\":[
-                {\"name\":\"HOST\",\"value\":\"0.0.0.0\"},
-                {\"name\":\"PORT\",\"value\":\"1337\"},
-                {\"name\":\"APP_KEYS\",\"value\":\"myAppKey1,myAppKey2,myAppKey3,myAppKey4\"},
-                {\"name\":\"API_TOKEN_SALT\",\"value\":\"randomApiSalt123\"},
-                {\"name\":\"ADMIN_JWT_SECRET\",\"value\":\"randomAdminSecret123\"},
-                {\"name\":\"JWT_SECRET\",\"value\":\"randomJwtSecret123\"}
-              ]
-            }]"
+            --container-definitions "[
+              {
+                \"name\": \"strapi\",
+                \"image\": \"$IMAGE_URI\",
+                \"essential\": true,
+                \"portMappings\": [
+                  {
+                    \"containerPort\": 1337,
+                    \"hostPort\": 1337
+                  }
+                ],
+                \"environment\": [
+                  {\"name\":\"HOST\",\"value\":\"0.0.0.0\"},
+                  {\"name\":\"PORT\",\"value\":\"1337\"},
+                  {\"name\":\"APP_KEYS\",\"value\":\"myAppKey1,myAppKey2,myAppKey3,myAppKey4\"},
+                  {\"name\":\"API_TOKEN_SALT\",\"value\":\"randomApiSalt123\"},
+                  {\"name\":\"ADMIN_JWT_SECRET\",\"value\":\"randomAdminSecret123\"},
+                  {\"name\":\"JWT_SECRET\",\"value\":\"randomJwtSecret123\"}
+                ]
+              }
+            ]" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
 
           echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
-
       - name: Create AppSpec
         run: |
           echo '{
