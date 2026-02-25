@@ -35,4 +35,5 @@ lifecycle {
     network_configuration,
     load_balancer
   ]
+ }
 }
