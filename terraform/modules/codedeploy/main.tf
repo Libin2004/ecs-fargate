@@ -33,13 +33,12 @@ blue_green_deployment_config {
   load_balancer_info {
     target_group_pair_info {
 
-      target_group {
-        name  = "strapi-blue-tg-libin"
-
+    target_group {
+      name = var.blue_tg_name
       }
 
-      target_group {
-        name = "strapi-green-tg-libin"
+    target_group {
+      name = var.green_tg_name
       }
 
       prod_traffic_route {
