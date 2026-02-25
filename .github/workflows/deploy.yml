@@ -11,7 +11,7 @@ env:
   ECS_CLUSTER: strapi-cluster-libin 
   ECS_SERVICE: strapi-service-libin 
   TASK_FAMILY: strapi-task-libin 
-  CONTAINER_NAME: strapi
+  
   
 
 jobs:
@@ -68,7 +68,11 @@ jobs:
           aws s3api head-bucket --bucket strapi-terraform-state-libin 2>/dev/null \
           || aws s3 mb s3://strapi-terraform-state-libin --region us-east-1
       - name: Destroy ECS Service (fix CodeDeploy issue)
-        
+      - name: Destroy ECS Service (fix CodeDeploy issue)
+        run: |
+          cd terraform
+          terraform init
+          terraform destroy -target=module.ecs -auto-approve 
         run: |
           cd terraform
           terraform init
@@ -102,7 +106,7 @@ jobs:
             --memory "1024" \
             --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
             --task-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
-            --container-definitions "[{\"name\":\"$CONTAINER_NAME\",\"image\":\"$IMAGE_URI\",\"essential\":true,\"portMappings\":[{\"containerPort\":1337,\"hostPort\":1337}]}]" \
+            --container-definitions "[{\"name\":\"strapi",\"image\":\"$IMAGE_URI\",\"essential\":true,\"portMappings\":[{\"containerPort\":1337,\"hostPort\":1337}]}]" \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
 
@@ -117,7 +121,7 @@ jobs:
                   "Properties": {
                     "TaskDefinition": "'"$TASK_DEF_ARN"'",
                     "LoadBalancerInfo": {
-                      "ContainerName": "$CONTAINER_NAME",
+                      "ContainerName": "strapi",
                       "ContainerPort": 1337
                     }
                   }
