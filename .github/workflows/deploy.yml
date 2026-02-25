@@ -131,4 +131,4 @@ jobs:
             --application-name strapi-codedeploy-libin \
             --deployment-group-name strapi-deployment-group-libin \
             --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
-            --revision "revisionType=S3,s3Location={bucket=$S3_BUCKET,key=appspec.json,bundleType=JSON}"
+            --revision revisionType=S3,s3Location={bucket=strapi-terraform-state-libin,key=appspec.json,bundleType=JSON}
