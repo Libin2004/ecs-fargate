@@ -1,4 +1,4 @@
-name: Deploy Strapi to ECS
+name: Strapi Full Pipeline
 
 on:
   push:
@@ -8,19 +8,16 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: strapi-repo
-  ECS_CLUSTER: strapi-cluster-libin
-  ECS_SERVICE: strapi-service
-  TASK_FAMILY: strapi-task
-  CONTAINER_NAME: strapi
   S3_BUCKET: strapi-codedeploy-libin
 
 jobs:
-  deploy:
+
+
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
@@ -33,37 +30,73 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+      - name: Build and Push Image
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./my-strapi-app
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          IMAGE_TAG=${{ github.sha }}
+          IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
 
-      - name: Register new task definition
-        id: register-task
-        env:
-          IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          docker build -t $IMAGE_URI ./my-strapi-app
+          docker push $IMAGE_URI
+
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+
+
+  terraform:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Apply
         run: |
-          echo "Registering task definition..."
+          cd terraform
+          terraform init
+          terraform apply -auto-approve \
+          -var="image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}"
+
+
+  deploy:
+    needs: terraform
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Register Task Definition & Deploy
+        run: |
+          IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}
 
           TASK_DEF_ARN=$(aws ecs register-task-definition \
-            --family $TASK_FAMILY \
+            --family strapi-task \
             --network-mode awsvpc \
             --requires-compatibilities FARGATE \
             --cpu "512" \
             --memory "1024" \
             --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
             --task-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
-            --container-definitions "[{\"name\":\"$CONTAINER_NAME\",\"image\":\"$IMAGE_URI\",\"essential\":true,\"portMappings\":[{\"containerPort\":1337,\"hostPort\":1337}]}]" \
+            --container-definitions "[{\"name\":\"strapi\",\"image\":\"$IMAGE_URI\",\"essential\":true,\"portMappings\":[{\"containerPort\":1337,\"hostPort\":1337}]}]" \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
 
-          echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
+          echo "Creating appspec.json..."
 
-      - name: Create AppSpec file
-        run: |
           echo '{
             "version": 1,
             "Resources": [
@@ -73,7 +106,7 @@ jobs:
                   "Properties": {
                     "TaskDefinition": "'"$TASK_DEF_ARN"'",
                     "LoadBalancerInfo": {
-                      "ContainerName": "'"$CONTAINER_NAME"'",
+                      "ContainerName": "strapi",
                       "ContainerPort": 1337
                     }
                   }
@@ -82,12 +115,8 @@ jobs:
             ]
           }' > appspec.json
 
-      - name: Upload AppSpec to S3
-        run: |
           aws s3 cp appspec.json s3://$S3_BUCKET/appspec.json
 
-      - name: Deploy using CodeDeploy
-        run: |
           aws deploy create-deployment \
             --application-name strapi-codedeploy-libin \
             --deployment-group-name strapi-deployment-group-libin \
