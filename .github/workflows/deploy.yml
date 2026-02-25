@@ -124,11 +124,23 @@ jobs:
               }
             ]
           }' > appspec.json
-
+      - name: Create revision.json
+        run: |
+          cat <<EOF > revision.json
+          {
+            "revisionType": "S3",
+            "s3Location": {
+              "bucket": "strapi-terraform-state-libin",
+              "key": "appspec.json",
+              "bundleType": "JSON"
+            }
+          }
+          EOF
           aws s3 cp appspec.json s3://strapi-terraform-state-libin/appspec.json
 
           aws deploy create-deployment \
-            --application-name strapi-codedeploy-libin \
-            --deployment-group-name strapi-deployment-group-libin \
-            --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
-            --revision revisionType=S3,s3Location={bucket=strapi-terraform-state-libin,key=appspec.json,bundleType=JSON}
+            aws deploy create-deployment \
+              --application-name strapi-codedeploy-libin \
+              --deployment-group-name strapi-deployment-group-libin \
+              --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
+              --revision file://revision.json
