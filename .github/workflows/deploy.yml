@@ -67,7 +67,7 @@ jobs:
         run: |
           aws s3api head-bucket --bucket strapi-terraform-state-libin 2>/dev/null \
           || aws s3 mb s3://strapi-terraform-state-libin --region us-east-1
-      - name: Destroy ECS Service (fix CodeDeploy issue)
+      
       - name: Destroy ECS Service (fix CodeDeploy issue)
         run: |
           cd terraform
