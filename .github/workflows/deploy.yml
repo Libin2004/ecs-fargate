@@ -11,7 +11,7 @@ env:
   ECS_CLUSTER: strapi-cluster-libin 
   ECS_SERVICE: strapi-service-libin 
   TASK_FAMILY: strapi-task-libin 
-  CONTAINER_NAME: strapi-libin
+  CONTAINER_NAME: strapi
   
 
 jobs:
@@ -68,11 +68,7 @@ jobs:
           aws s3api head-bucket --bucket strapi-terraform-state-libin 2>/dev/null \
           || aws s3 mb s3://strapi-terraform-state-libin --region us-east-1
       - name: Destroy ECS Service (fix CodeDeploy issue)
-        run: |
-          cd terraform
-          terraform init
-          terraform destroy -target=module.ecs -auto-approve    
-      - name: Terraform Apply
+        
         run: |
           cd terraform
           terraform init
