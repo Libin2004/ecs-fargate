@@ -53,10 +53,3 @@ blue_green_deployment_config {
   }
 }
 
-lifecycle {
-  ignore_changes = [
-    task_definition,
-    network_configuration,
-    load_balancer
-  ]
-}
