@@ -124,7 +124,7 @@ jobs:
               }
             ]
           }' > appspec.json
-      - name: Create revision.json
+      - name: Deploy using CodeDeploy
         run: |
           cat <<EOF > revision.json
           {
@@ -136,11 +136,13 @@ jobs:
             }
           }
           EOF
+
+          echo "Uploading AppSpec..."
           aws s3 cp appspec.json s3://strapi-terraform-state-libin/appspec.json
 
+          echo "Triggering CodeDeploy..."
           aws deploy create-deployment \
-            aws deploy create-deployment \
-              --application-name strapi-codedeploy-libin \
-              --deployment-group-name strapi-deployment-group-libin \
-              --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
-              --revision file://revision.json
+            --application-name strapi-codedeploy-libin \
+            --deployment-group-name strapi-deployment-group-libin \
+            --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
+            --revision file://revision.json
