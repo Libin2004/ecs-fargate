@@ -52,3 +52,11 @@ blue_green_deployment_config {
     events  = ["DEPLOYMENT_FAILURE"]
   }
 }
+
+lifecycle {
+  ignore_changes = [
+    task_definition,
+    network_configuration,
+    load_balancer
+  ]
+}
