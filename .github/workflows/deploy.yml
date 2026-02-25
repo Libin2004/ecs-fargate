@@ -98,9 +98,20 @@ jobs:
             --memory "1024" \
             --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
             --task-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
-            --container-definitions "[{\"name\":\"strapi\",\"image\":\"$IMAGE_URI\",\"essential\":true,\"portMappings\":[{\"containerPort\":1337,\"hostPort\":1337}]}]" \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
+            --container-definitions "[{
+              \"name\":\"strapi\",
+              \"image\":\"$IMAGE_URI\",
+              \"essential\":true,
+              \"portMappings\":[{\"containerPort\":1337,\"hostPort\":1337}],
+              \"environment\":[
+                {\"name\":\"HOST\",\"value\":\"0.0.0.0\"},
+                {\"name\":\"PORT\",\"value\":\"1337\"},
+                {\"name\":\"APP_KEYS\",\"value\":\"myAppKey1,myAppKey2,myAppKey3,myAppKey4\"},
+                {\"name\":\"API_TOKEN_SALT\",\"value\":\"randomApiSalt123\"},
+                {\"name\":\"ADMIN_JWT_SECRET\",\"value\":\"randomAdminSecret123\"},
+                {\"name\":\"JWT_SECRET\",\"value\":\"randomJwtSecret123\"}
+              ]
+            }]"
 
           echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
 
