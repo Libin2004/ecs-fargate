@@ -63,7 +63,10 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - uses: hashicorp/setup-terraform@v3
-
+      - name: Create S3 backend bucket if not exists
+        run: |
+          aws s3api head-bucket --bucket strapi-terraform-state-libin 2>/dev/null \
+          || aws s3 mb s3://strapi-terraform-state-libin --region us-east-1
       - name: Terraform Apply
         run: |
           cd terraform
