@@ -1,62 +1,62 @@
 name: Strapi Full Pipeline
 
 on:
-push:
-branches:
-- main
+ push:
+  branches:
+   - main
 
 env:
-AWS_REGION: us-east-1
-ECR_REPOSITORY: strapi-repo-libin
-ECS_CLUSTER: strapi-cluster-libin
-ECS_SERVICE: strapi-service-libin
-TASK_FAMILY: strapi-task-libin
-CODEDEPLOY_APP: strapi-codedeploy-libin
-CODEDEPLOY_GROUP: strapi-deployment-group-libin
-S3_BUCKET: strapi-terraform-state-libin
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: strapi-repo-libin
+  ECS_CLUSTER: strapi-cluster-libin
+  ECS_SERVICE: strapi-service-libin
+  TASK_FAMILY: strapi-task-libin
+  CODEDEPLOY_APP: strapi-codedeploy-libin
+  CODEDEPLOY_GROUP: strapi-deployment-group-libin
+  S3_BUCKET: strapi-terraform-state-libin
 
 jobs:
 
-build:
-runs-on: ubuntu-latest
+ build:
+  runs-on: ubuntu-latest
 
 
-steps:
-  - uses: actions/checkout@v4
+  steps:
+    - uses: actions/checkout@v4
 
-  - name: Configure AWS
-    uses: aws-actions/configure-aws-credentials@v4
-    with:
-      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      aws-region: ${{ env.AWS_REGION }}
+    - name: Configure AWS
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
 
-  - name: Ensure ECR exists
-    run: |
-      aws ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION \
-      || aws ecr create-repository --repository-name $ECR_REPOSITORY --region $AWS_REGION
+    - name: Ensure ECR exists
+      run: |
+        aws ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION \
+        || aws ecr create-repository --repository-name $ECR_REPOSITORY --region $AWS_REGION
 
-  - name: Login to ECR
-    id: login-ecr
-    uses: aws-actions/amazon-ecr-login@v2
+    - name: Login to ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
 
-  - name: Build and Push Image
-    run: |
-      IMAGE_TAG=${{ github.sha }}
-      IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+    - name: Build and Push Image
+      run: |
+        IMAGE_TAG=${{ github.sha }}
+        IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
 
-      docker build -t $IMAGE_URI ./my-strapi-app
-      docker push $IMAGE_URI
+        docker build -t $IMAGE_URI ./my-strapi-app
+        docker push $IMAGE_URI
 
-      echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+        echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
 
 terraform:
-needs: build
-runs-on: ubuntu-latest
+ needs: build
+ runs-on: ubuntu-latest
 
 
-steps:
+ steps:
   - uses: actions/checkout@v4
 
   - name: Configure AWS
@@ -83,8 +83,8 @@ steps:
 
 
 deploy:
-needs: terraform
-runs-on: ubuntu-latest
+  needs: terraform
+  runs-on: ubuntu-latest
 
 
 steps:
