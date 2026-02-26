@@ -20,7 +20,4 @@ default     = "ecs-sg-libin"
 
 
 
-variable "alb_sg_id" {
-description = "ALB security group ID (to allow traffic from ALB to ECS)"
-type        = string
-}
+

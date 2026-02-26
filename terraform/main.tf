@@ -12,7 +12,7 @@ data "aws_subnets" "default" {
 
 module "sg" {
   source = "./modules/secgrp"
-
+  
   vpc_id = data.aws_vpc.default.id
 }
 
