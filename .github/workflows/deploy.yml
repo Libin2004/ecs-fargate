@@ -1,10 +1,8 @@
 name: Strapi Full Pipeline
-
-on:
- push:
-  branches:
-   - main
-
+'on':
+  push:
+    branches:
+      - main
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: strapi-repo-libin
@@ -14,97 +12,88 @@ env:
   CODEDEPLOY_APP: strapi-codedeploy-libin
   CODEDEPLOY_GROUP: strapi-deployment-group-libin
   S3_BUCKET: strapi-terraform-state-libin
-
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: '${{ secrets.AWS_ACCESS_KEY_ID }}'
+          aws-secret-access-key: '${{ secrets.AWS_SECRET_ACCESS_KEY }}'
+          aws-region: '${{ env.AWS_REGION }}'
+      - name: Ensure ECR exists
+        run: >
+          aws ecr describe-repositories --repository-names $ECR_REPOSITORY
+          --region $AWS_REGION \
 
- build:
+          || aws ecr create-repository --repository-name $ECR_REPOSITORY
+          --region $AWS_REGION
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and Push Image
+        run: >
+          IMAGE_TAG=${{ github.sha }}
+
+          IMAGE_URI=${{ steps.login-ecr.outputs.registry
+          }}/$ECR_REPOSITORY:$IMAGE_TAG
+
+
+          docker build -t $IMAGE_URI ./my-strapi-app
+
+          docker push $IMAGE_URI
+
+
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+terraform:
+  needs: build
   runs-on: ubuntu-latest
-
-
   steps:
     - uses: actions/checkout@v4
-
     - name: Configure AWS
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-
-    - name: Ensure ECR exists
+        aws-access-key-id: '${{ secrets.AWS_ACCESS_KEY_ID }}'
+        aws-secret-access-key: '${{ secrets.AWS_SECRET_ACCESS_KEY }}'
+        aws-region: '${{ env.AWS_REGION }}'
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+    - name: Create S3 backend bucket if not exists
       run: |
-        aws ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION \
-        || aws ecr create-repository --repository-name $ECR_REPOSITORY --region $AWS_REGION
+        aws s3api head-bucket --bucket $S3_BUCKET 2>/dev/null \
+        || aws s3 mb s3://$S3_BUCKET --region $AWS_REGION
+    - name: Terraform Apply
+      run: >
+        cd terraform
 
-    - name: Login to ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2
+        terraform init
 
-    - name: Build and Push Image
-      run: |
-        IMAGE_TAG=${{ github.sha }}
-        IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+        terraform apply -auto-approve \
 
-        docker build -t $IMAGE_URI ./my-strapi-app
-        docker push $IMAGE_URI
-
-        echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
-
-
-terraform:
- needs: build
- runs-on: ubuntu-latest
-
-
- steps:
-  - uses: actions/checkout@v4
-
-  - name: Configure AWS
-    uses: aws-actions/configure-aws-credentials@v4
-    with:
-      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      aws-region: ${{ env.AWS_REGION }}
-
-  - name: Setup Terraform
-    uses: hashicorp/setup-terraform@v3
-
-  - name: Create S3 backend bucket if not exists
-    run: |
-      aws s3api head-bucket --bucket $S3_BUCKET 2>/dev/null \
-      || aws s3 mb s3://$S3_BUCKET --region $AWS_REGION
-
-  - name: Terraform Apply
-    run: |
-      cd terraform
-      terraform init
-      terraform apply -auto-approve \
-      -var="image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}"
-
-
+        -var="image=${{ secrets.AWS_ACCOUNT_ID
+        }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}"
 deploy:
   needs: terraform
   runs-on: ubuntu-latest
-
-
 steps:
   - uses: actions/checkout@v4
-
   - name: Configure AWS
     uses: aws-actions/configure-aws-credentials@v4
     with:
-      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      aws-region: ${{ env.AWS_REGION }}
-
+      aws-access-key-id: '${{ secrets.AWS_ACCESS_KEY_ID }}'
+      aws-secret-access-key: '${{ secrets.AWS_SECRET_ACCESS_KEY }}'
+      aws-region: '${{ env.AWS_REGION }}'
   - name: Set IMAGE_URI again
-    run: |
-      echo "IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}" >> $GITHUB_ENV
-
+    run: >
+      echo "IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID
+      }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}" >>
+      $GITHUB_ENV
   - name: Render task definition
-    run: |
-      sed "s|IMAGE_URI|$IMAGE_URI|g; s|ACCOUNT_ID|${{ secrets.AWS_ACCOUNT_ID }}|g" ./taskdef.json > taskdef-updated.json
-
+    run: >
+      sed "s|IMAGE_URI|$IMAGE_URI|g; s|ACCOUNT_ID|${{ secrets.AWS_ACCOUNT_ID
+      }}|g" ./taskdef.json > taskdef-updated.json
   - name: Register task definition
     run: |
       TASK_DEF_ARN=$(aws ecs register-task-definition \
@@ -113,19 +102,15 @@ steps:
         --output text)
 
       echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
-
   - name: Render appspec
     run: |
       sed "s|TASK_DEFINITION|$TASK_DEF_ARN|g" ./appspec.yaml > appspec.yaml
-
   - name: Create deployment bundle
     run: |
       zip deploy.zip appspec.yaml taskdef-updated.json
-
   - name: Upload bundle
     run: |
       aws s3 cp deploy.zip s3://$S3_BUCKET/deploy-${{ github.sha }}.zip
-
   - name: Deploy via CodeDeploy
     run: |
       DEPLOYMENT_ID=$(aws deploy create-deployment \
@@ -137,10 +122,8 @@ steps:
         --output text)
 
       echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_ENV
-
   - name: Wait for deployment
     run: |
       aws deploy wait deployment-successful \
         --deployment-id $DEPLOYMENT_ID \
         --region $AWS_REGION
-
