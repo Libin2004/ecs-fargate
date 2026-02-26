@@ -47,9 +47,36 @@ jobs:
 
 
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
-terraform:
-  needs: build
-  runs-on: ubuntu-latest
+  terraform:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: '${{ secrets.AWS_ACCESS_KEY_ID }}'
+          aws-secret-access-key: '${{ secrets.AWS_SECRET_ACCESS_KEY }}'
+          aws-region: '${{ env.AWS_REGION }}'
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      - name: Create S3 backend bucket if not exists
+        run: |
+          aws s3api head-bucket --bucket $S3_BUCKET 2>/dev/null \
+          || aws s3 mb s3://$S3_BUCKET --region $AWS_REGION
+      - name: Terraform Apply
+        run: >
+          cd terraform
+
+          terraform init
+
+          terraform apply -auto-approve \
+
+          -var="image=${{ secrets.AWS_ACCOUNT_ID
+          }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}"
+  deploy:
+    needs: terraform
+    runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v4
     - name: Configure AWS
@@ -58,72 +85,45 @@ terraform:
         aws-access-key-id: '${{ secrets.AWS_ACCESS_KEY_ID }}'
         aws-secret-access-key: '${{ secrets.AWS_SECRET_ACCESS_KEY }}'
         aws-region: '${{ env.AWS_REGION }}'
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-    - name: Create S3 backend bucket if not exists
-      run: |
-        aws s3api head-bucket --bucket $S3_BUCKET 2>/dev/null \
-        || aws s3 mb s3://$S3_BUCKET --region $AWS_REGION
-    - name: Terraform Apply
+    - name: Set IMAGE_URI again
       run: >
-        cd terraform
+        echo "IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID
+        }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}" >>
+        $GITHUB_ENV
+    - name: Render task definition
+      run: >
+        sed "s|IMAGE_URI|$IMAGE_URI|g; s|ACCOUNT_ID|${{ secrets.AWS_ACCOUNT_ID
+        }}|g" ./taskdef.json > taskdef-updated.json
+    - name: Register task definition
+      run: |
+        TASK_DEF_ARN=$(aws ecs register-task-definition \
+          --cli-input-json file://taskdef-updated.json \
+          --query 'taskDefinition.taskDefinitionArn' \
+          --output text)
 
-        terraform init
+        echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
+    - name: Render appspec
+      run: |
+        sed "s|TASK_DEFINITION|$TASK_DEF_ARN|g" ./appspec.yaml > appspec.yaml
+    - name: Create deployment bundle
+      run: |
+        zip deploy.zip appspec.yaml taskdef-updated.json
+    - name: Upload bundle
+      run: |
+        aws s3 cp deploy.zip s3://$S3_BUCKET/deploy-${{ github.sha }}.zip
+    - name: Deploy via CodeDeploy
+      run: |
+        DEPLOYMENT_ID=$(aws deploy create-deployment \
+          --application-name $CODEDEPLOY_APP \
+          --deployment-group-name $CODEDEPLOY_GROUP \
+          --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
+          --s3-location bucket=$S3_BUCKET,bundleType=zip,key=deploy-${{ github.sha }}.zip \
+          --query deploymentId \
+          --output text)
 
-        terraform apply -auto-approve \
-
-        -var="image=${{ secrets.AWS_ACCOUNT_ID
-        }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}"
-deploy:
-  needs: terraform
-  runs-on: ubuntu-latest
-steps:
-  - uses: actions/checkout@v4
-  - name: Configure AWS
-    uses: aws-actions/configure-aws-credentials@v4
-    with:
-      aws-access-key-id: '${{ secrets.AWS_ACCESS_KEY_ID }}'
-      aws-secret-access-key: '${{ secrets.AWS_SECRET_ACCESS_KEY }}'
-      aws-region: '${{ env.AWS_REGION }}'
-  - name: Set IMAGE_URI again
-    run: >
-      echo "IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID
-      }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}" >>
-      $GITHUB_ENV
-  - name: Render task definition
-    run: >
-      sed "s|IMAGE_URI|$IMAGE_URI|g; s|ACCOUNT_ID|${{ secrets.AWS_ACCOUNT_ID
-      }}|g" ./taskdef.json > taskdef-updated.json
-  - name: Register task definition
-    run: |
-      TASK_DEF_ARN=$(aws ecs register-task-definition \
-        --cli-input-json file://taskdef-updated.json \
-        --query 'taskDefinition.taskDefinitionArn' \
-        --output text)
-
-      echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
-  - name: Render appspec
-    run: |
-      sed "s|TASK_DEFINITION|$TASK_DEF_ARN|g" ./appspec.yaml > appspec.yaml
-  - name: Create deployment bundle
-    run: |
-      zip deploy.zip appspec.yaml taskdef-updated.json
-  - name: Upload bundle
-    run: |
-      aws s3 cp deploy.zip s3://$S3_BUCKET/deploy-${{ github.sha }}.zip
-  - name: Deploy via CodeDeploy
-    run: |
-      DEPLOYMENT_ID=$(aws deploy create-deployment \
-        --application-name $CODEDEPLOY_APP \
-        --deployment-group-name $CODEDEPLOY_GROUP \
-        --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
-        --s3-location bucket=$S3_BUCKET,bundleType=zip,key=deploy-${{ github.sha }}.zip \
-        --query deploymentId \
-        --output text)
-
-      echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_ENV
-  - name: Wait for deployment
-    run: |
-      aws deploy wait deployment-successful \
-        --deployment-id $DEPLOYMENT_ID \
-        --region $AWS_REGION
+        echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_ENV
+    - name: Wait for deployment
+      run: |
+        aws deploy wait deployment-successful \
+          --deployment-id $DEPLOYMENT_ID \
+          --region $AWS_REGION
