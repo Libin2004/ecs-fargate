@@ -113,28 +113,29 @@ jobs:
           aws s3 cp deploy.zip s3://$S3_BUCKET/deploy-${{ github.sha }}.zip
       - name: Deploy via CodeDeploy
         run: |
-          DEPLOYMENT_ID=$(aws deploy create-deployment \
-            --application-name $CODEDEPLOY_APP \
-            --deployment-group-name $CODEDEPLOY_GROUP \
-            --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
-            --s3-location bucket=$S3_BUCKET,bundleType=zip,key=deploy-${{ github.sha }}.zip \
-            --query deploymentId \
-            --output text)
+          DEPLOYMENT_ID=$(aws deploy create-deployment
+          --application-name $CODEDEPLOY_APP
+          --deployment-group-name $CODEDEPLOY_GROUP
+          --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes
+          --s3-location bucket=$S3_BUCKET,bundleType=zip,key=deploy-${{ github.sha }}.zip
+          --query deploymentId
+          --output text)
 
           echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_ENV
+
+          
       - name: Wait for deployment (safe)
         run: |
           set +e
-          aws deploy wait deployment-successful 
-          --deployment-id $DEPLOYMENT_ID 
+          aws deploy wait deployment-successful
+          --deployment-id $DEPLOYMENT_ID
           --region $AWS_REGION
-          echo "WAIT_EXIT_CODE=$?" >> $GITHUB_ENV
 
       - name: Get deployment details
         run: |
-          aws deploy get-deployment 
-          --deployment-id $DEPLOYMENT_ID 
-          --query "deploymentInfo.{status:status,error:errorInformation,message:statusMessage}" 
+          aws deploy get-deployment \ 
+          --deployment-id $DEPLOYMENT_ID \
+          --query "deploymentInfo.{status,error,message}" \
           --output json
        
       - name: Check deployment result 
@@ -149,4 +150,8 @@ jobs:
             echo "Deployment failed ❌" 
             exit 1  
           fi
+
+      - name: Debug deployment id
+        run: |
+          echo "Deployment ID: $DEPLOYMENT_ID"
 
