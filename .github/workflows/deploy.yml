@@ -110,10 +110,16 @@ jobs:
           run: |
             sed "s|TASK_DEFINITION|$TASK_DEF_ARN|g" ./appspec.yaml > appspec-updated.yaml
 
-        - name: Create deployment bundle
+        - name: Prepare AppSpec (REQUIRED FIX)
           run: |
             mv appspec-updated.yaml appspec.yaml
+        - name: Create deployment bundle
+          run: |
             zip deploy.zip appspec.yaml taskdef-updated.json
+        - name: Debug zip content
+          run: |
+            unzip -l deploy.zip
+
 
         - name: Upload bundle
           run: |
@@ -165,5 +171,5 @@ jobs:
 
         - name: Debug appspec
           run: |
-            cat appspec-updated.yaml    
+            cat appspec.yaml    
                 
