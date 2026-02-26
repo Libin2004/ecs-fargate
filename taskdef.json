@@ -1,0 +1,19 @@
+{
+  "family": "strapi-task-libin",
+  "networkMode": "awsvpc",
+  "containerDefinitions": [
+    {
+      "name": "strapi",
+      "image": "YOUR_ECR_IMAGE",
+      "portMappings": [
+        {
+          "containerPort": 1337,
+          "protocol": "tcp"
+        }
+      ]
+    }
+  ],
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512"
+}

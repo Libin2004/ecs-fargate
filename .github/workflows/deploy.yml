@@ -1,182 +1,146 @@
 name: Strapi Full Pipeline
 
 on:
-  push:
-    branches:
-      - main
+push:
+branches:
+- main
 
 env:
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY: strapi-repo-libin
-  ECS_CLUSTER: strapi-cluster-libin 
-  ECS_SERVICE: strapi-service-libin 
-  TASK_FAMILY: strapi-task-libin 
+AWS_REGION: us-east-1
+ECR_REPOSITORY: strapi-repo-libin
+ECS_CLUSTER: strapi-cluster-libin
+ECS_SERVICE: strapi-service-libin
+TASK_FAMILY: strapi-task-libin
+CODEDEPLOY_APP: strapi-codedeploy-libin
+CODEDEPLOY_GROUP: strapi-deployment-group-libin
+S3_BUCKET: strapi-terraform-state-libin
 
 jobs:
 
-  build:
-    runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v4
+build:
+runs-on: ubuntu-latest
 
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+steps:
+  - uses: actions/checkout@v4
 
-      - name: Create ECR repository if not exists
-        run: |
-          aws ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION \
-          || aws ecr create-repository --repository-name $ECR_REPOSITORY --region $AWS_REGION
+  - name: Configure AWS
+    uses: aws-actions/configure-aws-credentials@v4
+    with:
+      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+  - name: Ensure ECR exists
+    run: |
+      aws ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION \
+      || aws ecr create-repository --repository-name $ECR_REPOSITORY --region $AWS_REGION
 
-      - name: Build and Push Image
-        run: |
-          IMAGE_TAG=${{ github.sha }}
-          IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
-          docker build -t $IMAGE_URI ./my-strapi-app
-          docker push $IMAGE_URI
-          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+  - name: Login to ECR
+    id: login-ecr
+    uses: aws-actions/amazon-ecr-login@v2
 
-  terraform:
-    needs: build
-    runs-on: ubuntu-latest
+  - name: Build and Push Image
+    run: |
+      IMAGE_TAG=${{ github.sha }}
+      IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
 
-    steps:
-      - uses: actions/checkout@v4
+      docker build -t $IMAGE_URI ./my-strapi-app
+      docker push $IMAGE_URI
 
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+      echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
-      - uses: hashicorp/setup-terraform@v3
 
-      - name: Create S3 backend bucket if not exists
-        run: |
-          aws s3api head-bucket --bucket strapi-terraform-state-libin 2>/dev/null \
-          || aws s3 mb s3://strapi-terraform-state-libin --region us-east-1
+terraform:
+needs: build
+runs-on: ubuntu-latest
 
-      - name: Terraform Apply
-        run: |
-          cd terraform
-          terraform init
-          terraform apply -auto-approve \
-          -var="image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}"
+steps:
+  - uses: actions/checkout@v4
 
-  deploy:
-    needs: terraform
-    runs-on: ubuntu-latest
+  - name: Configure AWS
+    uses: aws-actions/configure-aws-credentials@v4
+    with:
+      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      aws-region: ${{ env.AWS_REGION }}
 
-    steps:
-      - uses: actions/checkout@v4
+  - name: Setup Terraform
+    uses: hashicorp/setup-terraform@v3
 
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-       
-      - name: Register Task Definition & Deploy
-        run: |
-          IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}
+  - name: Create S3 backend bucket if not exists
+    run: |
+      aws s3api head-bucket --bucket $S3_BUCKET 2>/dev/null \
+      || aws s3 mb s3://$S3_BUCKET --region $AWS_REGION
 
-          echo "Registering task definition..."
+  - name: Terraform Init & Apply
+    run: |
+      cd terraform
+      terraform init
+      terraform apply -auto-approve \
+      -var="image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}"
 
-          TASK_DEF_ARN=$(aws ecs register-task-definition \
-            --family $TASK_FAMILY \
-            --network-mode awsvpc \
-            --requires-compatibilities FARGATE \
-            --cpu "512" \
-            --memory "1024" \
-            --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
-            --task-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecs_fargate_taskRole \
-            --container-definitions "[
-              {
-                \"name\": \"strapi\",
-                \"image\": \"$IMAGE_URI\",
-                \"essential\": true,
-                \"portMappings\": [
-                  {
-                    \"containerPort\": 1337,
-                    \"hostPort\": 1337
-                  }
-                ],
-                \"environment\": [
-                  {\"name\":\"HOST\",\"value\":\"0.0.0.0\"},
-                  {\"name\":\"PORT\",\"value\":\"1337\"},
-                  {\"name\":\"APP_KEYS\",\"value\":\"myAppKey1,myAppKey2,myAppKey3,myAppKey4\"},
-                  {\"name\":\"API_TOKEN_SALT\",\"value\":\"randomApiSalt123\"},
-                  {\"name\":\"ADMIN_JWT_SECRET\",\"value\":\"randomAdminSecret123\"},
-                  {\"name\":\"JWT_SECRET\",\"value\":\"randomJwtSecret123\"}
-                ]
-              }
-            ]" \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
 
-          echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
-      - name: Create AppSpec
-        run: |
-          echo '{
-            "version": 1,
-            "Resources": [
-              {
-                "TargetService": {
-                  "Type": "AWS::ECS::Service",
-                  "Properties": {
-                    "TaskDefinition": "'"$TASK_DEF_ARN"'",
-                    "LoadBalancerInfo": {
-                      "ContainerName": "strapi",
-                      "ContainerPort": 1337
-                    }
-                  }
-                }
-              }
-            ]
-          }' > appspec.json
-      - name: Stop previous deployment (if any)
-        run: |
-          DEPLOY_ID=$(aws deploy list-deployments \
-            --application-name strapi-codedeploy-libin \
-            --deployment-group-name strapi-deployment-group-libin \
-            --include-only-statuses InProgress \
-            --query "deployments[0]" \
-            --output text)
 
-          if [ "$DEPLOY_ID" != "None" ]; then
-            echo "Stopping deployment $DEPLOY_ID"
-            aws deploy stop-deployment --deployment-id $DEPLOY_ID
-          else
-            echo "No active deployment"
-          fi    
 
-      - name: Deploy using CodeDeploy
-        run: |
-          cat <<EOF > revision.json
-          {
-            "revisionType": "S3",
-            "s3Location": {
-              "bucket": "strapi-terraform-state-libin",
-              "key": "appspec.json",
-              "bundleType": "JSON"
-            }
-          }
-          EOF
+deploy:
+needs: terraform
+runs-on: ubuntu-latest
 
-          aws s3 cp appspec.json s3://strapi-terraform-state-libin/appspec.json
+steps:
+  - uses: actions/checkout@v4
 
-          aws deploy create-deployment \
-            --application-name strapi-codedeploy-libin \
-            --deployment-group-name strapi-deployment-group-libin \
-            --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
-            --revision file://revision.json
+  - name: Configure AWS
+    uses: aws-actions/configure-aws-credentials@v4
+    with:
+      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      aws-region: ${{ env.AWS_REGION }}
+
+  - name: Set IMAGE_URI again
+    run: |
+      echo "IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}" >> $GITHUB_ENV
+
+  - name: Render task definition
+    run: |
+      sed "s|IMAGE_URI|$IMAGE_URI|g; s|ACCOUNT_ID|${{ secrets.AWS_ACCOUNT_ID }}|g" ./taskdef.json > taskdef-updated.json
+
+  - name: Register task definition
+    run: |
+      TASK_DEF_ARN=$(aws ecs register-task-definition \
+        --cli-input-json file://taskdef-updated.json \
+        --query 'taskDefinition.taskDefinitionArn' \
+        --output text)
+
+      echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
+
+  - name: Render appspec
+    run: |
+      sed "s|TASK_DEFINITION|$TASK_DEF_ARN|g" ./appspec.yaml > appspec.yaml
+
+  - name: Create deployment bundle
+    run: |
+      zip deploy.zip appspec.yaml taskdef-updated.json
+
+  - name: Upload bundle
+    run: |
+      aws s3 cp deploy.zip s3://$S3_BUCKET/deploy-${{ github.sha }}.zip
+
+  - name: Deploy via CodeDeploy
+    run: |
+      DEPLOYMENT_ID=$(aws deploy create-deployment \
+        --application-name $CODEDEPLOY_APP \
+        --deployment-group-name $CODEDEPLOY_GROUP \
+        --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
+        --s3-location bucket=$S3_BUCKET,bundleType=zip,key=deploy-${{ github.sha }}.zip \
+        --query deploymentId \
+        --output text)
+
+      echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_ENV
+
+  - name: Wait for deployment
+    run: |
+      aws deploy wait deployment-successful \
+        --deployment-id $DEPLOYMENT_ID \
+        --region $AWS_REGION
+

@@ -1,12 +1,12 @@
 resource "aws_security_group" "ecs_sg" {
-  name = var.ecs_sg_name
+  name   = var.ecs_sg_name
   vpc_id = var.vpc_id
 
   ingress {
-    from_port   = 1337
-    to_port     = 1337
-    protocol    = "tcp"
-    security_groups = [aws_security_group.alb_sg.id]
+    from_port       = 1337
+    to_port         = 1337
+    protocol        = "tcp"
+    security_groups = [var.alb_sg_id]
   }
 
   egress {
@@ -17,9 +17,8 @@ resource "aws_security_group" "ecs_sg" {
   }
 }
 
-
 resource "aws_security_group" "alb_sg" {
-  name = var.alb_sg_name
+  name   = var.alb_sg_name
   vpc_id = var.vpc_id
 
   ingress {
@@ -30,11 +29,18 @@ resource "aws_security_group" "alb_sg" {
   }
 
   ingress {
-  from_port   = 443
-  to_port     = 443
-  protocol    = "tcp"
-  cidr_blocks = ["0.0.0.0/0"]
-}
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   egress {
     from_port   = 0
