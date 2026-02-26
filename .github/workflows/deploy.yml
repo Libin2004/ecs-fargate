@@ -108,11 +108,11 @@ jobs:
 
         - name: Render appspec
           run: |
-            sed "s|TASK_DEFINITION|$TASK_DEF_ARN|g" ./appspec.yaml > appspec.yaml
+            sed "s|TASK_DEFINITION|$TASK_DEF_ARN|g" ./appspec.yaml > appspec-updated.yaml
 
         - name: Create deployment bundle
           run: |
-            zip deploy.zip appspec.yaml taskdef-updated.json
+            zip deploy.zip appspec-updated.yaml taskdef-updated.json
 
         - name: Upload bundle
           run: |
@@ -161,4 +161,8 @@ jobs:
               echo "Deployment failed ❌"
               exit 1
             fi
-      
+
+        - name: Debug appspec
+          run: |
+            cat appspec-updated.yaml    
+                

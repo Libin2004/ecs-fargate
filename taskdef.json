@@ -1,19 +1,33 @@
 {
-  "family": "strapi-task-libin",
-  "networkMode": "awsvpc",
-  "containerDefinitions": [
+"family": "strapi-task-libin",
+"networkMode": "awsvpc",
+"requiresCompatibilities": ["FARGATE"],
+"cpu": "256",
+"memory": "512",
+
+"containerDefinitions": [
+{
+"name": "strapi",
+"image": "YOUR_ECR_IMAGE",
+"essential": true,
+
+
+  "portMappings": [
     {
-      "name": "strapi",
-      "image": "YOUR_ECR_IMAGE",
-      "portMappings": [
-        {
-          "containerPort": 1337,
-          "protocol": "tcp"
-        }
-      ]
+      "containerPort": 1337,
+      "hostPort": 1337,
+      "protocol": "tcp"
     }
   ],
-  "requiresCompatibilities": ["FARGATE"],
-  "cpu": "256",
-  "memory": "512"
+
+  "environment": [
+    {
+      "name": "HOST",
+      "value": "0.0.0.0"
+    }
+  ]
+}
+
+
+]
 }
