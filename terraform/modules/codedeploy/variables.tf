@@ -8,7 +8,14 @@ variable "blue_tg_name" {
 variable "green_tg_name" {
   type = string
 }
-variable "listener_arn" {}
+
+variable "prod_listener_arn" {
+  type = string
+}
+
+variable "test_listener_arn" {
+  type = string
+}
 
 variable "cluster_name" {
 description = "ECS cluster name"

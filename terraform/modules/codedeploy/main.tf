@@ -30,22 +30,25 @@ blue_green_deployment_config {
     deployment_option = "WITH_TRAFFIC_CONTROL"
   }
 
-  load_balancer_info {
-    target_group_pair_info {
-
+load_balancer_info {
+  target_group_pair_info {
     target_group {
       name = var.blue_tg_name
-      }
+    }
 
     target_group {
       name = var.green_tg_name
-      }
+    }
 
-      prod_traffic_route {
-        listener_arns = [var.listener_arn]
-      }
+    prod_traffic_route {
+      listener_arns = [var.prod_listener_arn]
+    }
+
+    test_traffic_route {
+      listener_arns = [var.test_listener_arn]
     }
   }
+}
 
   auto_rollback_configuration {
     enabled = true
