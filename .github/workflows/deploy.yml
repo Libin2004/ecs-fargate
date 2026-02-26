@@ -122,8 +122,31 @@ jobs:
             --output text)
 
           echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_ENV
-      - name: Wait for deployment
+      - name: Wait for deployment (safe)
         run: |
-          aws deploy wait deployment-successful \
-            --deployment-id $DEPLOYMENT_ID \
-            --region $AWS_REGION
+          set +e
+          aws deploy wait deployment-successful 
+          --deployment-id $DEPLOYMENT_ID 
+          --region $AWS_REGION
+          echo "WAIT_EXIT_CODE=$?" >> $GITHUB_ENV
+
+      - name: Get deployment details
+        run: |
+          aws deploy get-deployment 
+          --deployment-id $DEPLOYMENT_ID 
+          --query "deploymentInfo.{status:status,error:errorInformation,message:statusMessage}" 
+          --output json
+       
+      - name: Check deployment result 
+        run: | 
+          STATUS=$(aws deploy get-deployment \ 
+          --deployment-id $DEPLOYMENT_ID \ 
+          --query "deploymentInfo.status" \ 
+          --output text)
+ 
+          echo "Final status: $STATUS"
+          if [ "$STATUS" != "Succeeded" ]; then 
+            echo "Deployment failed ❌" 
+            exit 1  
+          fi
+
