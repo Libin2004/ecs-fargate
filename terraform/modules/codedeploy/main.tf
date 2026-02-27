@@ -44,9 +44,7 @@ load_balancer_info {
       listener_arns = [var.prod_listener_arn]
     }
 
-    test_traffic_route {
-      listener_arns = [var.test_listener_arn]
-    }
+    
   }
 }
 

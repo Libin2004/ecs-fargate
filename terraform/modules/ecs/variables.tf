@@ -3,8 +3,15 @@ variable "cluster_id" {
   type        = string
 }
 
-variable "subnet_1" {}
-variable "subnet_2" {}
+variable "subnet_1" {
+  type    = string
+  default = "subnet-0ab62296c70ee5004"
+}
+
+variable "subnet_2" {
+  type    = string
+  default = "subnet-0be62c87ff6f2a6bb"
+}
 variable "ecs_sg_id" {}
 
 variable "blue_tg_arn" {

@@ -13,9 +13,7 @@ variable "prod_listener_arn" {
   type = string
 }
 
-variable "test_listener_arn" {
-  type = string
-}
+
 
 variable "cluster_name" {
 description = "ECS cluster name"

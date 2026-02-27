@@ -60,7 +60,7 @@ module "codedeploy" {
   blue_tg_name       = module.alb.blue_tg_name
   green_tg_name      = module.alb.green_tg_name
   prod_listener_arn  = module.alb.prod_listener_arn
-  test_listener_arn  = module.alb.test_listener_arn
+  
 }
 
 resource "aws_ecs_task_definition" "strapi" {

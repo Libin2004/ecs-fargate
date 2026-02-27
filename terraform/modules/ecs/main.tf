@@ -29,11 +29,5 @@ resource "aws_ecs_service" "service" {
     security_groups  = [var.ecs_sg_id]
     assign_public_ip = true
   }
-lifecycle {
-  ignore_changes = [
-    task_definition,
-    network_configuration,
-    load_balancer
-  ]
- }
+
 }
