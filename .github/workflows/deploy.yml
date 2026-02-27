@@ -144,14 +144,38 @@ jobs:
           cat taskdef-updated.json
 
       - name: Register task definition
+        id: register-task
         run: |
+         
+
+          echo "📌 Registering ECS Task Definition..."
+
+          # Check file exists
+          if [ ! -f taskdef-updated.json ]; then
+            echo "❌ taskdef-updated.json not found!"
+            exit 1
+          fi
+
+          # Register task definition
           TASK_DEF_ARN=$(aws ecs register-task-definition \
             --cli-input-json file://taskdef-updated.json \
-            --query 'taskDefinition.taskDefinitionArn' \
+            --query "taskDefinition.taskDefinitionArn" \
             --output text)
 
+          # Validate output
+          if [ -z "$TASK_DEF_ARN" ]; then
+            echo "❌ Failed to register task definition"
+            exit 1
+          fi
+
+          # Export for next steps
           echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
-          echo "✅ Registered: $TASK_DEF_ARN"
+          echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+
+          echo "✅ Registered Task Definition: $TASK_DEF_ARN"
+
+                echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
+                echo "✅ Registered: $TASK_DEF_ARN"
 
       - name: Render appspec
         run: |
