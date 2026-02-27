@@ -1,6 +1,6 @@
 {
 "family": "strapi-task-libin",
-"executionRoleArn": "arn:aws:iam::811738710312:role:role/ecsTaskExecutionRole",
+"executionRoleArn": "arn:aws:iam::811738710312:role:role/ecs_fargate_taskRole",
 "networkMode": "awsvpc",
 "requiresCompatibilities": ["FARGATE"],
 "cpu": "256",
